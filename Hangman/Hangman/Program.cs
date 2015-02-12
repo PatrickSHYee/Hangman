@@ -25,9 +25,9 @@ namespace Hangman
 "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n" +
 "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n" +
 "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::";
+        static string[] turns= {"head", "torso", "left arm", "right arm", "left leg", "right leg"};
         static Random randGen = new Random();
         static string WordToGuess = null;
-        static int turns = 0;
         public static string user_PlayingField { get; set; }  // this is going to be where the masked word stored
         static string wrongLetters = null;
         public static string letterGuessed { get; set; }
@@ -37,10 +37,11 @@ namespace Hangman
             string GuessedLetter = null;
             bool quitter = true;
             string manHanging = new string(hangingMan.ToArray());  // an instance of the hanging man
+            List<string> leftOverTurns = null;
 
             WordToGuess = dictionary[randGen.Next(0, dictionary.Length)];
 
-            initializer(ref manHanging); // setup the game
+            initializer(ref manHanging, ref leftOverTurns); // setup the game
             PrintScreen_Title();
             GetUserName();
             PrintScreen_instructions();
@@ -54,12 +55,22 @@ namespace Hangman
                 GuessedLetter = GetUserInput();
                 // see if the guessedLetter is in the wordToGuess
                 // the game is done
-                if (IsInWord(GuessedLetter, ref manHanging) || turns== 0)
+                if (IsInWord(GuessedLetter, ref manHanging, ref leftOverTurns) || leftOverTurns.Count == 0)
                 {
+                    PrintScreen_Title();
+                    PrintGame(manHanging);
+                    if (leftOverTurns.Count == 0)
+                    {
+                        Console.WriteLine("YOU ARE DEAD!!");
+                    }
+                    else
+                    {
+                        Console.WriteLine("YOU WIN!!");
+                    }
                     quitter = printQuit();
                     if (quitter)
                     {
-                        initializer(ref manHanging);
+                        initializer(ref manHanging, ref leftOverTurns);
                     }
                 }
             }
@@ -69,10 +80,10 @@ namespace Hangman
         /// this will set up or reset the game variables
         /// </summary>
         /// <param name="man">I want to be able to change the current hang man</param>
-        static void initializer(ref string man)
+        static void initializer(ref string man, ref List<string> bodyparts)
         {
             string tempString = null;
-            turns = 7;
+            bodyparts = turns.ToList();
             wrongLetters = null;
             Console.SetWindowSize(Console.WindowWidth, Console.LargestWindowHeight);
             WordToGuess = dictionary[randGen.Next(0, dictionary.Length)];
@@ -97,7 +108,7 @@ namespace Hangman
         /// <param name="guess">user input</param>
         /// <param name="Deadman">ref to the hang man</param>
         /// <returns></returns>
-        static bool IsInWord(string guess, ref string Deadman)
+        static bool IsInWord(string guess, ref string Deadman, ref List<string> BodyParts)
         {
             int part = 0;  // this does nothing for this function
             char[] fieldHolder = user_PlayingField.ToArray();
@@ -115,6 +126,7 @@ namespace Hangman
             if (int.TryParse(guess, out part) )
             {
                 PrintASCII(message_Wrong);
+                System.Threading.Thread.Sleep(500);
                 return false;
             }
             // connect match
@@ -141,64 +153,80 @@ namespace Hangman
                         user_PlayingField = new string(fieldHolder);
                     } else 
                     {
-                        part = randGen.Next(1, turns);
+                        part = randGen.Next(0, BodyParts.Count-1);
+                        Deadman = new string(UpdateMan(BodyParts[part], Deadman));
+                        
                         wrongLetters += guess;
                         // messed up logic but it makes sense
-                        // do something
-                        // take head if temp
-                        if (part == 1)
+                        if (part == 0)
                         {
-                            for (int i = 0; i < Deadman.Length; i++)
+                            // if BodyParts.Count not equals to 1 remove what's left over or all.
+                            if (BodyParts.Count != 0)
                             {
-                                if (Deadman[i] == 'o')
+                                for (int i = 1; i < BodyParts.Count; i++)
                                 {
-                                    Deadman.ToArray()[i] = ':';
+                                    Deadman = new string(UpdateMan(BodyParts[i], Deadman));
                                 }
+                                BodyParts.RemoveRange(1, BodyParts.Count-1);
                             }
-                            part++;
                         }
-                        // left leg and left arm
-                        if (part == 2 || part == 4)
+                        if (BodyParts[part] == "torso")
                         {
-                            for (int i = 0; i < Deadman.Length; i++)
+                            // check if there is a right leg and a left leg
+                            if (BodyParts.Contains("right leg"))
                             {
-                                if (Deadman[i] == '/')
-                                {
-                                    newDeadman[i] = ':';
-                                }
+                                Deadman = new string(UpdateMan("right leg", Deadman));
+                                BodyParts.Remove("right leg");
                             }
-                            turns--;
-                        }
-                        // torso
-                        if (part == 3)
-                        {
-                            for (int i = 0; i < Deadman.Length; i++)
+                            if (BodyParts.Contains("left leg"))
                             {
-                                if (Deadman[i] == '/')
-                                {
-                                    newDeadman[i] = ':';
-                                }
+                                Deadman = new string(UpdateMan("left leg", Deadman));
+                                BodyParts.Remove("left leg");
                             }
-                            turns--;
                         }
-                        // right arm and right leg
-                        if (part == 5 || part == 6)
-                        {
-                            for (int i = 0; i < Deadman.Length; i++)
-                            {
-                                if (Deadman[i] == '\\')
-                                {
-                                    newDeadman[i] = ':';
-                                }
-                            }
-                            turns--;
-                        }
+                        BodyParts.RemoveAt(part);
                     }
                 }
             }
 
-            Deadman = new string(newDeadman);
             return false;
+        }
+
+        /// <summary>
+        /// Updates the Deadman when parts need to be remove from the image
+        /// </summary>
+        /// <param name="part">The part is there to be remove from the image</param>
+        /// <param name="Deadman">new image</param>
+        /// <returns></returns>
+        private static char[] UpdateMan(string part, string Deadman)
+        {
+            char[] newDeadman = Deadman.ToArray();
+            if (part == "head" && newDeadman[319] != ':')
+            {
+                newDeadman[319] = ':';
+            }
+            if (part == "left arm" && newDeadman[389] != ':')
+            {
+                newDeadman[389] = ':';
+            }
+            if (part == "right arm" && newDeadman[391] != ':')
+            {
+                newDeadman[391] = ':';
+            }
+            if (part == "torso" && newDeadman[390] != ':')
+            {
+                newDeadman[390] = ':';
+                newDeadman[460] = ':';
+            }
+            if (part == "left leg" && newDeadman[530] != ':')
+            {
+                newDeadman[530] = ':';
+            }
+            if (part == "right leg" && newDeadman[532] != ':')
+            {
+                newDeadman[532] = ':';
+            }
+            return newDeadman;
         }
 
         /// <summary>
